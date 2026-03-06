@@ -1,0 +1,28 @@
+# ============================================================
+# .env — заполните перед запуском
+# НЕ коммитить в git! Добавьте .env в .gitignore
+# ============================================================
+
+# --- PostgreSQL ---
+POSTGRES_USER=n8n_user
+POSTGRES_PASSWORD=CHANGE_ME_use_strong_password_32chars
+POSTGRES_DB=n8n_db
+
+# --- n8n Core ---
+# Сгенерировать: openssl rand -hex 32
+N8N_ENCRYPTION_KEY=CHANGE_ME_generate_with_openssl_rand_hex_32
+
+# Публичный URL для вебхуков (с trailing slash)
+# Локально: http://localhost:5678/
+WEBHOOK_URL=https://your-domain.com/
+
+# --- n8n Basic Auth ---
+N8N_BASIC_AUTH_USER=admin
+N8N_BASIC_AUTH_PASSWORD=CHANGE_ME_strong_ui_password
+
+# --- OpenAI ---
+OPENAI_API_KEY=sk-your-openai-key-here
+
+# --- Telegram ---
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_CHAT_ID=your_chat_id_here
