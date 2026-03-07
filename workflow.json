@@ -1,0 +1,910 @@
+{
+  "name": "Sticky Notes",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "news-autoposter",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "6de62a68-3155-4deb-a9ea-9ad5ab782ef3",
+      "name": "Webhook Trigger1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        208,
+        688
+      ],
+      "webhookId": "5d528dd5-bcb0-406f-bee0-de8e9ef90993"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*) AS cnt FROM news_posts WHERE source_url = '{{ $('Webhook Trigger1').item.json.body.url }}'",
+        "options": {}
+      },
+      "id": "7df42f6e-131c-478c-8ca9-0ea785920a99",
+      "name": "Check Duplicate1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        912,
+        672
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "liJhrHpXWKpkqkts",
+          "name": "тестовый"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "dup-check",
+              "leftValue": "={{ $json.cnt }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e0cd67c6-92e7-4534-a843-e9a5679aa920",
+      "name": "IF: Not Duplicate?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"error\": \"Conflict\", \"message\": \"URL уже был обработан ранее\"}",
+        "options": {
+          "responseCode": 409
+        }
+      },
+      "id": "c7d10218-bfc3-45f2-8260-1e0ade55a0c5",
+      "name": "Respond ",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { execSync } = require('child_process');\n\nconst url = $('Webhook Trigger1').item.json.body.url;\nconst id = $('Webhook Trigger1').item.json.body.id;\n\ntry {\n  const result = execSync(\n    `yt-dlp -x --audio-format mp3 --audio-quality 0 --no-playlist -o \"/home/node/downloads/${id}.%(ext)s\" \"${url}\" 2>&1`,\n    { timeout: 120000 }\n  ).toString();\n  return [{ json: { output: result, id: id, url: url } }];\n} catch (error) {\n  throw Object.assign(new Error(`yt-dlp failed: ${error.message}`), { nodeName: 'Download Audio (yt-dlp)' });\n}"
+      },
+      "id": "52322b44-4c19-4944-9fe6-05a1810c5c50",
+      "name": "Download Audio (yt-dlp)1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        656
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "fileSelector": "=/home/node/downloads/{{ $('Webhook Trigger1').item.json.body.id }}.mp3"
+      },
+      "id": "5a1f0bd6-32d2-4730-af01-2ff2ebdfa557",
+      "name": "Read Audio File1",
+      "type": "n8n-nodes-base.readBinaryFiles",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "=1090024911",
+        "text": "={{ $('AI Agent').item.json.output.replace(/\\n+This message sent automatically.*$/s, '').replace(/\\n+This message was sent.*$/s, '').trim() }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "9fa7cba8-b44a-493a-a03c-36b1c16c85ff",
+      "name": "Send to Telegram1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3360,
+        640
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "webhookId": "7e1a306c-a670-401f-b6ee-c8122ceb24d9",
+      "credentials": {
+        "telegramApi": {
+          "id": "KI1g99AqrTOOuWpy",
+          "name": "Telegram account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const { execSync } = require('child_process');\n\nconst id = $('Webhook Trigger1').item.json.body.id;\ntry {\n  execSync(`rm -f /home/node/downloads/${id}.mp3`);\n} catch(e) {}\nreturn [{ json: { cleaned: true, id: id } }];"
+      },
+      "id": "c8408d8a-2537-4c36-9a55-302564a5ccbe",
+      "name": "Cleanup File1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3584,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"ok\", \"message\": \"Пост успешно опубликован\"}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "1afd07da-3784-4f47-902a-27846977cfa6",
+      "name": "Respond success1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3792,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO error_logs (node_name, error_message, input_data) \nVALUES (\n  '{{ $json.error?.nodeName ?? \"Download Audio (yt-dlp)\" }}',\n  '{{ ($json.error?.message ?? $json.message ?? \"unknown error\").replace(/'/g, \"''\") }}',\n  '{{ JSON.stringify($input.item.json) }}'::jsonb\n)",
+        "options": {}
+      },
+      "id": "65b36fa6-5cdc-4bd4-875d-33e7a2f7d339",
+      "name": "Log Error to DB1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1632,
+        992
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "liJhrHpXWKpkqkts",
+          "name": "тестовый"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "=1090024911",
+        "text": "==⚠️ *Ошибка в News Autoposter*\n\n*Нода:* `Download Audio (yt-dlp)`\n*URL:* {{ $('Webhook Trigger1').item.json.body?.url ?? 'n/a' }}\n*Время:* {{ $now.format('dd.MM.yyyy HH:mm:ss') }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "0ff20604-9441-4485-93c0-3e5f467d9ed3",
+      "name": "Send Error Alert1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1856,
+        992
+      ],
+      "webhookId": "59fc0f6d-a62d-4c86-9b53-fc2d3ea9328d",
+      "credentials": {
+        "telegramApi": {
+          "id": "KI1g99AqrTOOuWpy",
+          "name": "Telegram account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const { execSync } = require('child_process');\n\nconst id = $('Webhook Trigger1').item.json.body.id;\ntry {\n  execSync(`rm -f /home/node/downloads/${id}.mp3`);\n} catch(e) {}\nreturn [{ json: { cleaned: true } }];"
+      },
+      "id": "35d3826e-cdb3-4db6-a5ac-08c80d4b3955",
+      "name": "Cleanup on Error1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"error\": \"Internal Server Error\", \"message\": \"{{ $json.error?.message ?? \"Processing failed\" }}\"}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "9cb7b807-0a65-404a-bc6b-791dc8f6926a",
+      "name": "Respond 501",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2272,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"error\": \"Bad Request\", \"message\": \"Поле url обязательно и не должно быть пустым\"}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "d744de32-51bc-4fab-8fc3-d5126a8e9fcd",
+      "name": "Error → Alert",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1040,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4.1",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        2704,
+        864
+      ],
+      "id": "4e1fa985-8f41-4489-8b6d-06a19059d104",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "id": "OGu8HHldoMNSIaZ8",
+          "name": "работа"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.assemblyai.com/v2/upload",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "0a83206daf4b49318576e71086601ef9"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "ba4045f8-1d8a-4a46-93bd-9ec5dcec000c",
+      "name": "Upload Audio (AssemblyAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1776,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.assemblyai.com/v2/transcript",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "0a83206daf4b49318576e71086601ef9"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"audio_url\": \"{{ $json.upload_url }}\",\n  \"language_code\": \"ru\",\n  \"speech_models\": [\"universal-2\"]\n}",
+        "options": {}
+      },
+      "id": "deddf5e3-0b3a-47e4-a33d-963da4b2d770",
+      "name": "Request Transcript (AssemblyAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2016,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 15
+      },
+      "id": "f79bc30e-bd3a-41ae-9338-60524cfaffd6",
+      "name": "Wait for Transcript",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2224,
+        640
+      ],
+      "webhookId": "assemblyai-wait-webhook"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.assemblyai.com/v2/transcript/{{ $('Request Transcript (AssemblyAI)').item.json.id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "0a83206daf4b49318576e71086601ef9"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4fd4e381-13ba-49b4-bb5e-e2700905b089",
+      "name": "Get Transcript (AssemblyAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2464,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const url = $input.item.json.body.url;\n\nif (!url || url.trim() === '') {\n  return [{ json: { valid: false } }];\n}\n\nreturn [{ json: { valid: true, url: url, id: $input.item.json.body.id } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        688
+      ],
+      "id": "d0f6d65c-f76f-4e39-868b-e68c1a4dc3bd",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3cfd50bd-8de2-4a78-b6dd-251f95bad31a",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        656,
+        688
+      ],
+      "id": "d76d6478-b077-494b-9baa-a358f04c0bb3",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Транскрипция видео: {{ $('Get Transcript (AssemblyAI)').item.json.text }}\n\nURL источника: {{ $('Webhook Trigger1').item.json.body.url }}\n\nСделай из этой транскрипции новостной пост для Telegram в формате:\n*Заголовок*\n\nКраткое изложение (3-5 предложений).\n\n#хэштег1 #хэштег2 #хэштег3\n\n🔗 Источник: {{ $('Webhook Trigger1').item.json.body.url }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        2704,
+        640
+      ],
+      "id": "ac15ebf8-32de-4977-ade6-a4c7063e57fe",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list",
+          "cachedResultName": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "news_posts",
+          "mode": "list",
+          "cachedResultName": "news_posts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "source_url": "={{ $('Webhook Trigger1').item.json.body.url }}",
+            "transcript": "={{ $('Get Transcript (AssemblyAI)').item.json.text }}",
+            "post_text": "={{ $('AI Agent').item.json.output }}",
+            "status": "\"published\""
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "source_url",
+              "displayName": "source_url",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "transcript",
+              "displayName": "transcript",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "post_text",
+              "displayName": "post_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3072,
+        640
+      ],
+      "id": "007abb50-3d91-4466-bcc7-1c4864c59382",
+      "name": "Insert rows in a table",
+      "credentials": {
+        "postgres": {
+          "id": "liJhrHpXWKpkqkts",
+          "name": "тестовый"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## 📡 News Autoposter\n**Пайплайн:** YouTube URL → yt-dlp → AssemblyAI → GPT (OpenRouter) → PostgreSQL → Telegram\n\n**Переменные окружения:**\n- `OPENROUTER_API_KEY` — ключ OpenRouter\n- `TELEGRAM_CHAT_ID` — ID канала/чата\n\n**Таблицы БД:** `news_posts`, `error_logs`\n\n**Входной запрос:**\n```json\n{ \"url\": \"https://youtube.com/...\", \"id\": \"video_id\" }\n```",
+        "height": 1216,
+        "width": 4032,
+        "color": 4
+      },
+      "id": "3993ec00-aea0-4d6f-900f-b6383f0060bc",
+      "name": "📋 Описание воркфлоу",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        16,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🔐 Блок 1 — Вход и валидация\n\n**Webhook** принимает POST `/news-autoposter`\n\n**Code in JavaScript** проверяет наличие поля `url`.\nПри отсутствии → **If1** уходит в false → **Error → Alert** возвращает 400.\n\n**Check Duplicate** — бонус ★:\nSELECT COUNT(*) из `news_posts`.\nЕсли URL уже есть → **IF: Not Duplicate?** → **Respond 409**.",
+        "height": 916,
+        "width": 1284,
+        "color": 6
+      },
+      "id": "da1b608d-9944-4e49-b595-087542c5796d",
+      "name": "📋 Блок 1 — Вход",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        16,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## ⬇️ Блок 2 — Скачивание аудио\n\n**Download Audio (yt-dlp)** — Code нода.\nСкачивает mp3 в `/home/node/downloads/{id}.mp3`\n\nПри ошибке (невалидный URL) → ветка Error → Log Error to DB\n\n**Read Audio File** читает mp3 как бинарные данные для отправки в AssemblyAI.",
+        "height": 652,
+        "width": 412,
+        "color": 3
+      },
+      "id": "d9e63171-51fe-407c-b032-c7eeb02106e6",
+      "name": "📋 Блок 2 — yt-dlp",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1296,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🎙️ Блок 3 — Транскрибация\n\n**Upload Audio** → загружает mp3 на AssemblyAI\n**Request Transcript** → запрашивает транскрибацию (язык: ru, модель: universal-2)\n**Wait 15s** → ждём обработки\n**Get Transcript** → забираем готовый текст\n\nРезультат в `$json.text`",
+        "height": 908,
+        "width": 908,
+        "color": 5
+      },
+      "id": "94057b58-a299-4b45-b0c3-782e1b0140b1",
+      "name": "📋 Блок 3 — AssemblyAI",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1712,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🤖 Блок 4 — Генерация поста\n\n**AI Agent** с OpenRouter (gpt-4.1)\n\nПромпт: транскрипция + URL → новостной пост\n\nФормат:\n- *Заголовок*\n- Краткое изложение (3-5 предложений)\n- #хэштеги\n- 🔗 Источник: URL",
+        "height": 908,
+        "width": 356,
+        "color": 5
+      },
+      "id": "287ee372-cf87-417d-9afe-3498fcd84385",
+      "name": "📋 Блок 4 — AI",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2608,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 💾 Блок 5 — Сохранение и отправка\n\n**Insert rows in a table** → сохраняет в `news_posts`:\n- source_url, transcript, post_text, status\n\n**Send to Telegram** → отправляет пост в канал\n(Markdown, retry 2×)\n\n**Cleanup File** → удаляет mp3 из /tmp\n\n**Respond success** → возвращает 200 клиенту",
+        "height": 912,
+        "width": 1084,
+        "color": 4
+      },
+      "id": "71b900a2-99d6-4682-a7eb-ca00b2f51eb4",
+      "name": "📋 Блок 5 — Сохранение",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2960,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## ⚠️ Блок 6 — Обработка ошибок\n\n**400 Bad Request** — нет поля `url` в запросе\n→ Code in JavaScript → If1 (false) → Error → Alert → Respond 400\n\n**409 Conflict** — URL уже обрабатывался ранее\n→ Check Duplicate → IF: Not Duplicate? (false) → Respond 409\n\n**500 Internal Server Error** — падение ноды Download Audio (yt-dlp)\n→ Log Error to DB → Send Error Alert (Telegram) → Cleanup on Error → Respond 500",
+        "height": 260,
+        "width": 2220
+      },
+      "id": "be75e8fe-91f2-4ca1-a143-77c2602c3b88",
+      "name": "📋 Блок 6 — Ошибки",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        352,
+        896
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate1": {
+      "main": [
+        [
+          {
+            "node": "IF: Not Duplicate?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Not Duplicate?1": {
+      "main": [
+        [
+          {
+            "node": "Download Audio (yt-dlp)1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Audio (yt-dlp)1": {
+      "main": [
+        [
+          {
+            "node": "Read Audio File1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error to DB1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Audio File1": {
+      "main": [
+        [
+          {
+            "node": "Upload Audio (AssemblyAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Telegram1": {
+      "main": [
+        [
+          {
+            "node": "Cleanup File1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cleanup File1": {
+      "main": [
+        [
+          {
+            "node": "Respond success1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Error to DB1": {
+      "main": [
+        [
+          {
+            "node": "Send Error Alert1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Error Alert1": {
+      "main": [
+        [
+          {
+            "node": "Cleanup on Error1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cleanup on Error1": {
+      "main": [
+        [
+          {
+            "node": "Respond 501",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Audio (AssemblyAI)": {
+      "main": [
+        [
+          {
+            "node": "Request Transcript (AssemblyAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Transcript (AssemblyAI)": {
+      "main": [
+        [
+          {
+            "node": "Wait for Transcript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Transcript": {
+      "main": [
+        [
+          {
+            "node": "Get Transcript (AssemblyAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Transcript (AssemblyAI)": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error → Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Insert rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert rows in a table": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "a62bbb28-c14d-405c-9374-1a4b8fc5e6c2",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "622f99fc24705712abbaf024791bb191234b5978297a2364326ba955dfe243cd"
+  },
+  "id": "Ex9lLFjtn6vJ11sC",
+  "tags": []
+}
